@@ -9,10 +9,13 @@ import webbrowser
 import ssl
 from PIL import Image
 
-CONFIG_URL = "https://discovery2radio.it"
+# Ricostruzione dei link a pezzi per evitare i tagli della chat
+URL_BASE_SITO = "https://discovery2radio.it"
+CONFIG_URL = URL_BASE_SITO + "/radio_config.txt"
+
 HEADERS = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/120.0.0.0'}
 
-# Forza Python a ignorare i controlli rigidi sui certificati di sicurezza SSL del sito
+# Forza il bypass dei controlli di sicurezza SSL rigidi dell'hosting
 ctx = ssl.create_default_context()
 ctx.check_hostname = False
 ctx.verify_mode = ssl.CERT_NONE
@@ -33,27 +36,32 @@ class BlindedRadioApp(ctk.CTk):
         self.radio_frame = ctk.CTkFrame(self)
         self.radio_frame.pack(pady=10, padx=20, fill="x")
         
-        self.image_label = ctk.CTkLabel(self, text="[ Caricamento Immagine... ]")
+        self.image_label = ctk.CTkLabel(self, text="[ Caricamento Copertina... ]")
         self.image_label.pack(pady=20)
         
-        self.text_label = ctk.CTkLabel(self, text="Sincronizzazione in corso...", wraplength=380, font=ctk.CTkFont(size=14))
+        self.text_label = ctk.CTkLabel(self, text="Sincronizzazione canali...", wraplength=380, font=ctk.CTkFont(size=14))
         self.text_label.pack(pady=10, padx=10)
         
-        # Lista canali di emergenza interni (se il sito web fallisce la connessione, l'app funziona comunque!)
+        # Flussi definitivi delle tue radio ricostruiti al millimetro per evitare alterazioni
         self.config_data = {
             "TITOLO_APP": "Discovery 2 Radio Player",
-            "RADIO1_NOME": "DISCOVERY 2 RADIO", "RADIO1_URL": "https://asurahosting.com",
-            "RADIO2_NOME": "WOLF 1 RADIO", "RADIO2_URL": "http://laut.fm",
-            "RADIO3_NOME": "RADIO SOLARIS", "RADIO3_URL": "https://asurahosting.com",
-            "RADIO4_NOME": "LAIKA 2 RADIO", "RADIO4_URL": "https://dedicateware.com",
-            "LINK_TESTO": "https://discovery2radio.it",
-            "LINK_IMMAGINE": "https://discovery2radio.it"
+            "RADIO1_NOME": "DISCOVERY 2 RADIO", 
+            "RADIO1_URL": "https://cast5.asurahosting.com/proxy/giancar1/stream ",
+            "RADIO2_NOME": "WOLF 1 RADIO", 
+            "RADIO2_URL": "http://stream.laut.fm/wolf-one",
+            "RADIO3_NOME": "RADIO SOLARIS", 
+            "RADIO3_URL": "https://cast6.asurahosting.com/proxy/radiosolaris/stream",
+            "RADIO4_NOME": "LAIKA 2 RADIO", 
+            "RADIO4_URL": "https://fra-pioneer01.dedicateware.com:3155/stream
+",
+            "LINK_TESTO": URL_BASE_SITO + "/info.txt",
+            "LINK_IMMAGINE": URL_BASE_SITO + "/copertina.jpg"
         }
         
-        # Costruisce subito i bottoni per garantire che l'app sia utilizzabile all'istante
+        # Genera i bottoni immediatamente con i dati interni protetti
         self.build_ui_dinamica()
         
-        # Avvia il caricamento dei dati remoti in background senza bloccare la grafica
+        # Tenta l'aggiornamento remoto in background (Testo e Copertina)
         threading.Thread(target=self.load_remote_config, daemon=True).start()
 
     def load_remote_config(self):
@@ -65,12 +73,10 @@ class BlindedRadioApp(ctk.CTk):
                     if "=" in line:
                         k, v = line.split("=", 1)
                         self.config_data[k.strip()] = v.strip()
-            # Aggiorna il titolo se personalizzato dal sito
             self.after(0, lambda: self.label_title.configure(text=self.config_data.get("TITOLO_APP")))
         except:
-            self.after(0, lambda: self.text_label.configure(text="Modalità Offline attiva. Pronto."))
+            pass # Se il sito dà 403 o scade, l'app usa comunque i dati interni di emergenza senza bloccarsi
         
-        # Avvia il loop per recuperare l'immagine e il testo scorrevole
         threading.Thread(target=self.update_content_loop, daemon=True).start()
 
     def build_ui_dinamica(self):
@@ -90,7 +96,7 @@ class BlindedRadioApp(ctk.CTk):
     def update_content_loop(self):
         while True:
             try:
-                # 1. Scarica e mostra il testo da info.txt
+                # Recupero del testo scorrevole
                 url_testo = self.config_data.get("LINK_TESTO")
                 if url_testo:
                     req_testo = urllib.request.Request(url_testo, headers=HEADERS)
@@ -98,7 +104,7 @@ class BlindedRadioApp(ctk.CTk):
                         testo = r.read().decode('utf-8', errors='ignore')
                         self.after(0, lambda t=testo: self.text_label.configure(text=t))
                 
-                # 2. Scarica e mostra l'immagine da copertina.jpg
+                # Recupero e rendering dell'immagine
                 url_img = self.config_data.get("LINK_IMMAGINE")
                 if url_img:
                     req_img = urllib.request.Request(url_img, headers=HEADERS)
@@ -114,4 +120,3 @@ class BlindedRadioApp(ctk.CTk):
 if __name__ == "__main__":
     app = BlindedRadioApp()
     app.mainloop()
-
