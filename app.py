@@ -4,10 +4,8 @@ import urllib.request
 import threading
 import time
 import os
-, io
+import io
 from PIL import Image
-# Usiamo una libreria audio nativa Windows leggera inclusa nell'eseguibile
-import vlc 
 
 CONFIG_URL = "https://discovery2radio.it"
 
@@ -19,10 +17,6 @@ class BlindedRadioApp(ctk.CTk):
         self.geometry("450x650")
         ctk.set_appearance_mode("dark")
         ctk.set_default_color_theme("blue")
-        
-        # Player audio nativo (VLC standalone incapsulato)
-        self.instance = vlc.Instance("--no-video", "--quiet")
-        self.player = self.instance.media_player_new()
         
         # Interfaccia Grafica Iniziale
         self.label_title = ctk.CTkLabel(self, text="Caricamento canali...", font=ctk.CTkFont(size=20, weight="bold"))
@@ -70,9 +64,11 @@ class BlindedRadioApp(ctk.CTk):
 
     def play_stream(self, url, nome):
         self.text_label.configure(text=f"In riproduzione: {nome}")
-        media = self.instance.media_new(url)
-        self.player.set_media(media)
-        self.player.play()
+        # Usa il player di Windows integrato a riga di comando per lo stream (invisibile ed efficace)
+        try:
+            os.system(f"start /min wmplayer \"{url}\"")
+        except:
+            pass
 
     def update_content_loop(self):
         while True:
