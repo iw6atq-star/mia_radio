@@ -5,15 +5,18 @@ import threading
 import time
 import os
 import io
+import webbrowser
 from PIL import Image
 
 CONFIG_URL = "https://discovery2radio.it"
+# Fingiamo di essere un normale browser Chrome per evitare il blocco 403
+HEADERS = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'}
 
 class BlindedRadioApp(ctk.CTk):
     def __init__(self):
         super().__init__()
         
-        self.title("WebRadio Player")
+        self.title("Discovery 2 Radio Player")
         self.geometry("450x650")
         ctk.set_appearance_mode("dark")
         ctk.set_default_color_theme("blue")
@@ -38,7 +41,8 @@ class BlindedRadioApp(ctk.CTk):
 
     def load_remote_config(self):
         try:
-            with urllib.request.urlopen(CONFIG_URL, timeout=10) as response:
+            req = urllib.request.Request(CONFIG_URL, headers=HEADERS)
+            with urllib.request.urlopen(req, timeout=10) as response:
                 lines = response.read().decode('utf-8').splitlines()
                 for line in lines:
                     if "=" in line:
@@ -46,7 +50,7 @@ class BlindedRadioApp(ctk.CTk):
                         self.config_data[k.strip()] = v.strip()
             self.after(0, self.build_ui_dinamica)
         except Exception as e:
-            self.after(0, lambda: self.text_label.configure(text=f"Errore di connessione: {e}"))
+            self.after(0, lambda: self.text_label.configure(text=f"Errore di connessione Config: {e}"))
 
     def build_ui_dinamica(self):
         self.label_title.configure(text=self.config_data.get("TITOLO_APP", "Radio Player"))
@@ -64,11 +68,11 @@ class BlindedRadioApp(ctk.CTk):
 
     def play_stream(self, url, nome):
         self.text_label.configure(text=f"In riproduzione: {nome}")
-        # Usa il player di Windows integrato a riga di comando per lo stream (invisibile ed efficace)
+        # Avvia il flusso in background sfruttando il motore nativo del sistema
         try:
-            os.system(f"start /min wmplayer \"{url}\"")
-        except:
-            pass
+            webbrowser.open(url)
+        except Exception as e:
+            print(f"Errore riproduzione: {e}")
 
     def update_content_loop(self):
         while True:
@@ -76,20 +80,22 @@ class BlindedRadioApp(ctk.CTk):
                 # Aggiorna Testo
                 url_testo = self.config_data.get("LINK_TESTO")
                 if url_testo:
-                    with urllib.request.urlopen(url_testo, timeout=5) as r:
+                    req_testo = urllib.request.Request(url_testo, headers=HEADERS)
+                    with urllib.request.urlopen(req_testo, timeout=5) as r:
                         testo = r.read().decode('utf-8', errors='ignore')
                         self.after(0, lambda t=testo: self.text_label.configure(text=t))
                 
                 # Aggiorna Immagine
                 url_img = self.config_data.get("LINK_IMMAGINE")
                 if url_img:
-                    with urllib.request.urlopen(url_img, timeout=5) as r:
+                    req_img = urllib.request.Request(url_img, headers=HEADERS)
+                    with urllib.request.urlopen(req_img, timeout=5) as r:
                         img_data = r.read()
                         img = Image.open(io.BytesIO(img_data))
                         ctk_img = ctk.CTkImage(light_image=img, dark_image=img, size=(200, 200))
                         self.after(0, lambda ci=ctk_img: self.image_label.configure(image=ci, text=""))
-            except:
-                pass
+            except Exception as e:
+                print(f"Errore loop contenuti: {e}")
             time.sleep(20)
 
 if __name__ == "__main__":
