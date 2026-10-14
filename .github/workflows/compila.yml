@@ -23,9 +23,9 @@ jobs:
         python -m pip install --upgrade pip
         pip install customtkinter Pillow pyinstaller
 
-    - name: Compila in file EXE unico
+    - name: Compila in file EXE unico e blindato
       run: |
-        pyinstaller --noconsole --onefile app.py
+        pyinstaller --noconsole --onefile --collect-all customtkinter app.py
 
     - name: Salva il file compilato
       uses: actions/upload-artifact@v4
