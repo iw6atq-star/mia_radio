@@ -20,12 +20,12 @@ jobs:
 
     - name: Installa le librerie indispensabili
       run: |
-        python -m pip install --upgrade pip setuptools wheel
-        pip install customtkinter Pillow pyinstaller python-vlc
+        python -m pip install --upgrade pip
+        pip install customtkinter Pillow pyinstaller
 
     - name: Compila in file EXE unico
       run: |
-        python -m PyInstaller --noconsole --onefile app.py
+        pyinstaller --noconsole --onefile app.py
 
     - name: Salva il file compilato
       uses: actions/upload-artifact@v4
