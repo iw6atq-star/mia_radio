@@ -46,7 +46,7 @@ class FinalDynamicRadioApp:
         r2 = "http://stream.laut.fm/wolf-one"
         r3 = "https://cast6.asurahosting.com/proxy/radiosolaris/stream"
         r4 = "https://fra-pioneer01.dedicateware.com:3155/stream"
-        r5 = "https://crt.red"
+        r5 = "https://crt.red/2/A.mp3"
         
         self.streams = {
             "DISCOVERY 2 RADIO": r1,
