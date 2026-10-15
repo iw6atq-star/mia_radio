@@ -1,168 +1,307 @@
-import tkinter as tk
-import threading
-import urllib.request
+import io
 import ssl
 import subprocess
+import threading
 import time
-import io
+import urllib.request
+import tkinter as tk
 from PIL import Image, ImageTk
+import sounddevice as sd
+import imageio_ffmpeg
 
-# =========================================================================
-# IMPOSTA QUI I TUOI INDIRIZZI FISSI ESTERNI (RIPRISTINATI)
-# =========================================================================
 URL_TESTO_REMOTO = "https://crt.red/2/info.txt"
 URL_COPERTINA_IMG = "https://crt.red/2/copertina.jpg"
 
-HEADERS = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/120.0.0.0'}
+HEADERS = {
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/120.0.0.0"
+}
 
-class FinalDynamicRadioApp:
+STREAMS = {
+    "DISCOVERY 2 RADIO": "https://cast5.asurahosting.com/proxy/giancar1/stream",
+    "WOLF 1 RADIO": "http://stream.laut.fm/wolf-one",
+    "RADIO SOLARIS": "https://cast6.asurahosting.com/proxy/radiosolaris/stream",
+    "LAIKA 2 RADIO": "https://fra-pioneer01.dedicateware.com:3155/stream",
+    "STAZIONE 5 — A.mp3": "https://www.crt.red/2/A.mp3",
+}
+
+
+class RadioSolarisApp:
     def __init__(self, root):
         self.root = root
         self.root.title("RADIO SOLARIS DESKTOP")
-        self.root.geometry("450x680")
+        self.root.geometry("450x780")
+        self.root.minsize(450, 780)
         self.root.configure(bg="#1e1e1e")
 
-        # Gestore per tracciare il processo audio attivo
-        self.audio_process = None
-        
-        # UI Grafica Scura Windows 11
-        self.label_title = tk.Label(root, text="RADIO SOLARIS DESKTOP", font=("Arial", 16, "bold"), fg="white", bg="#1e1e1e")
-        self.label_title.pack(pady=20)
+        self.process = None
+        self.audio_lock = threading.Lock()
+        self.generation = 0
+        self.closing = False
+        self.current_station = None
+        self.photo = None
 
-        # Contenitore per l'immagine di copertina (SISTEMATO)
+        tk.Label(
+            root, text="RADIO SOLARIS DESKTOP",
+            font=("Arial", 16, "bold"),
+            fg="white", bg="#1e1e1e"
+        ).pack(pady=(14, 8))
+
         self.img_label = tk.Label(root, bg="#1e1e1e")
-        self.img_label.pack(pady=10)
+        self.img_label.pack(pady=5)
 
-        # Frame per contenere i bottoni delle stazioni
         self.radio_frame = tk.Frame(root, bg="#1e1e1e")
-        self.radio_frame.pack(pady=10, fill="x")
+        self.radio_frame.pack(fill="x", padx=10, pady=5)
 
-        # Display informativo testuale (SISTEMATO)
-        self.text_label = tk.Label(root, text="Sincronizzazione contenuti...", font=("Arial", 11), fg="white", bg="#1e1e1e", wraplength=380)
-        self.text_label.pack(pady=10, padx=10)
+        for name, url in STREAMS.items():
+            tk.Button(
+                self.radio_frame,
+                text=f"📻 {name}",
+                font=("Arial", 10, "bold"),
+                fg="white", bg="#0078d4",
+                activebackground="#005a9e",
+                bd=0, height=2, cursor="hand2",
+                command=lambda u=url, n=name: self.play_stream(u, n)
+            ).pack(fill="x", pady=3)
 
-        # I tuoi indirizzi reali e completi ripristinati e intatti
-        r1 = "https://cast5.asurahosting.com/proxy/giancar1/stream"
-        r2 = "http://stream.laut.fm/wolf-one"
-        r3 = "https://cast6.asurahosting.com/proxy/radiosolaris/stream"
-        r4 = "https://fra-pioneer01.dedicateware.com:3155/stream"
-        r5 = "https://crt.red/2/A.mp3"
-        
-        self.streams = {
-            "DISCOVERY 2 RADIO": r1,
-            "WOLF 1 RADIO": r2,
-            "RADIO SOLARIS": r3,
-            "LAIKA 2 RADIO": r4,
-            "STAZIONE 5": r5
-        }
-        
-        # Gestione stazioni (I tuoi parametri di rete originali)
-        self.url_mp3 = "https://crt.red"
+        self.text_label = tk.Label(
+            root,
+            text="Pronto. Seleziona una stazione.",
+            font=("Arial", 10),
+            fg="white", bg="#1e1e1e",
+            wraplength=405, justify="left",
+            anchor="nw"
+        )
+        self.text_label.pack(
+            fill="both", expand=True, padx=14, pady=8
+        )
 
-        # Configura il contesto SSL locale per scaricare in sicurezza senza blocchi
+        tk.Button(
+            root, text="⏹ FERMA RADIO",
+            font=("Arial", 11, "bold"),
+            fg="white", bg="#d32f2f",
+            activebackground="#9a0007",
+            bd=0, height=2, cursor="hand2",
+            command=self.stop_stream
+        ).pack(fill="x", padx=30, pady=(4, 14))
+
         self.ctx = ssl.create_default_context()
-        self.ctx.check_hostname = False
-        self.ctx.verify_mode = ssl.CERT_NONE
-
-        self.build_ui()
-        
-        # Avvia il ciclo continuo di aggiornamento per immagini e testi
-        threading.Thread(target=self.update_content_loop, daemon=True).start()
-        
         self.root.protocol("WM_DELETE_WINDOW", self.on_closing)
 
-    def build_ui(self):
-        for nome, url in self.streams.items():
-            btn = tk.Button(self.radio_frame, text=f"📻 {nome}", font=("Arial", 11, "bold"), fg="white", bg="#0078d4", activebackground="#005a9e", activeforeground="white", bd=0, height=2, cursor="hand2")
-            btn.configure(command=lambda u=url, n=nome: self.play_stream(u, n))
-            btn.pack(pady=5, padx=10, fill="x")
-            
-        # Bottone dedicato alla stazione MP3 fissa
-        btn_mp3 = tk.Button(self.radio_frame, text="📻 RIPRODUCI STAZIONE WEB MP3", font=("Arial", 11, "bold"), fg="white", bg="#0078d4", activebackground="#005a9e", activeforeground="white", bd=0, height=2, cursor="hand2")
-        btn_mp3.configure(command=self.play_mp3_stream)
-        btn_mp3.pack(pady=15, padx=10, fill="x")
+        threading.Thread(
+            target=self.update_content_loop, daemon=True
+        ).start()
 
-        # Bottone STOP dedicato
-        btn_stop = tk.Button(self.root, text="⏹️ FERMA RADIO", font=("Arial", 11, "bold"), fg="white", bg="#d32f2f", activebackground="#9a0007", activeforeground="white", bd=0, height=2, cursor="hand2")
-        btn_stop.configure(command=self.stop_stream)
-        btn_stop.pack(pady=15, padx=30, fill="x")
+    def set_status(self, text, generation=None):
+        if self.closing:
+            return
+        self.root.after(
+            0, lambda: self._safe_status(text, generation)
+        )
 
-    def play_stream(self, url, nome):
-        self.text_label.configure(text=f"Apertura: {nome}...")
-        self.stop_stream()
-        # Avvia lo scaricamento e la riproduzione in background continuo senza congelare Tkinter
-        threading.Thread(target=self.execute_native_audio, args=(url, nome), daemon=True).start()
-        
-    def play_mp3_stream(self):
-        self.text_label.configure(text="Bufferizzazione flusso audio in corso...")
-        self.play_stream(self.url_mp3, "STAZIONE MP3 WEB")
+    def _safe_status(self, text, generation):
+        if self.closing:
+            return
+        if generation is not None and generation != self.generation:
+            return
+        self.text_label.configure(text=text)
 
-    def execute_native_audio(self, url, nome):
+    def play_stream(self, url, name):
+        self.stop_stream(update_status=False)
+        self.generation += 1
+        generation = self.generation
+        self.current_station = name
+
+        self.set_status(f"Connessione a {name}…", generation)
+
+        threading.Thread(
+            target=self._audio_worker,
+            args=(url, name, generation),
+            daemon=True
+        ).start()
+
+    def _audio_worker(self, url, name, generation):
+        process = None
+        output = None
+
         try:
-            # Comando di Windows Media Player eseguito in modo isolato
-            cmd = f'wmplayer.exe "{url}"'
-            
-            startupinfo = subprocess.STARTUPINFO()
-            startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
-            startupinfo.wShowWindow = 0  # 0 nasconde del tutto la finestra principale, lasciando l'audio attivo
-            
-            self.audio_process = subprocess.Popen(
-                cmd, 
-                shell=True, 
-                startupinfo=startupinfo,
+            ffmpeg = imageio_ffmpeg.get_ffmpeg_exe()
+
+            command = [
+                ffmpeg, "-hide_banner", "-loglevel", "error",
+                "-nostdin", "-i", url,
+                "-vn", "-f", "s16le",
+                "-acodec", "pcm_s16le",
+                "-ar", "44100", "-ac", "2",
+                "pipe:1"
+            ]
+
+            process = subprocess.Popen(
+                command,
+                stdin=subprocess.DEVNULL,
                 stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE
+                stderr=subprocess.PIPE,
+                bufsize=0,
+                creationflags=getattr(
+                    subprocess, "CREATE_NO_WINDOW", 0
+                )
             )
-            self.root.after(0, lambda: self.text_label.configure(text=f"In riproduzione: {nome} 🎶"))
-        except Exception as e:
-            self.root.after(0, lambda: self.text_label.configure(text="Errore nel caricamento del flusso audio"))
 
-    def stop_stream(self):
-        try:
-            subprocess.run("taskkill /f /im wmplayer.exe", shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-        except:
-            pass
-        self.audio_process = None
-        self.text_label.configure(text="Radio spenta.")
+            with self.audio_lock:
+                if generation != self.generation or self.closing:
+                    process.terminate()
+                    return
+                self.process = process
+
+            output = sd.RawOutputStream(
+                samplerate=44100,
+                channels=2,
+                dtype="int16",
+                blocksize=4096
+            )
+            output.start()
+
+            self.set_status(f"▶ In riproduzione: {name}", generation)
+
+            # Audio PCM: 16 bit, stereo = 4 byte per fotogramma.
+            pending = b""
+
+            while not self.closing and generation == self.generation:
+                chunk = process.stdout.read(16384)
+                if not chunk:
+                    break
+
+                pending += chunk
+                usable = len(pending) - (len(pending) % 4)
+
+                if usable:
+                    output.write(pending[:usable])
+                    pending = pending[usable:]
+
+            if generation == self.generation and not self.closing:
+                detail = ""
+                try:
+                    if process.poll() is None:
+                        process.terminate()
+                    error = process.stderr.read(1000)
+                    detail = error.decode(
+                        "utf-8", errors="replace"
+                    ).strip()
+                except Exception:
+                    pass
+
+                message = f"La riproduzione di {name} è terminata o si è interrotta."
+                if detail:
+                    message += "\nDettaglio: " + detail[:300]
+                self.set_status(message, generation)
+
+        except Exception as exc:
+            self.set_status(
+                f"Errore audio per {name}.\n"
+                f"Controlla URL e uscita audio di Windows.\n{exc}",
+                generation
+            )
+
+        finally:
+            if output is not None:
+                try:
+                    output.stop()
+                    output.close()
+                except Exception:
+                    pass
+
+            if process is not None:
+                try:
+                    if process.poll() is None:
+                        process.terminate()
+                        try:
+                            process.wait(timeout=2)
+                        except subprocess.TimeoutExpired:
+                            process.kill()
+                except Exception:
+                    pass
+
+            with self.audio_lock:
+                if self.process is process:
+                    self.process = None
+
+    def stop_stream(self, update_status=True):
+        self.generation += 1
+
+        with self.audio_lock:
+            process = self.process
+            self.process = None
+
+        if process is not None:
+            try:
+                process.terminate()
+            except Exception:
+                pass
+
+        self.current_station = None
+
+        if update_status and not self.closing:
+            self.set_status("Radio spenta.")
 
     def update_content_loop(self):
-        """Loop di sincronizzazione che scarica costantemente testo e copertina dal server"""
-        while True:
+        while not self.closing:
+            # Gli URL attuali sono homepage, non endpoint specifici.
+            # Il recupero viene mantenuto senza bloccare il motore audio.
             try:
-                # 1. Scaricamento ed esposizione del testo informativo remoto
-                req_text = urllib.request.Request(URL_TESTO_REMOTO, headers=HEADERS)
-                with urllib.request.urlopen(req_text, context=self.ctx, timeout=5) as response:
-                    testo = response.read().decode('utf-8', errors='ignore').strip()
-                if testo:
-                    self.root.after(0, lambda t=testo: self.text_label.configure(text=t))
+                req = urllib.request.Request(
+                    URL_TESTO_REMOTO, headers=HEADERS
+                )
+                with urllib.request.urlopen(
+                    req, context=self.ctx, timeout=5
+                ) as response:
+                    text = response.read().decode(
+                        "utf-8", errors="ignore"
+                    ).strip()
 
-                # 2. Scaricamento ed elaborazione dell'immagine di copertina remota
-                req_img = urllib.request.Request(URL_COPERTINA_IMG, headers=HEADERS)
-                with urllib.request.urlopen(req_img, context=self.ctx, timeout=5) as response:
-                    img_data = response.read()
-                
-                image = Image.open(io.BytesIO(img_data))
-                image = image.resize((180, 180), Image.Resampling.LANCZOS)
-                photo = ImageTk.PhotoImage(image)
-                
-                self.root.after(0, lambda p=photo: self.set_image(p))
-            except Exception as e:
+                if text and len(text) < 5000 and not text.lower().startswith(
+                    ("<!doctype html", "<html")
+                ):
+                    self.root.after(
+                        0, lambda t=text: self._set_remote_text(t)
+                    )
+            except Exception:
                 pass
-            time.sleep(30)  # Esegue il controllo di sincronizzazione ogni 30 secondi
+
+            try:
+                req = urllib.request.Request(
+                    URL_COPERTINA_IMG, headers=HEADERS
+                )
+                with urllib.request.urlopen(
+                    req, context=self.ctx, timeout=5
+                ) as response:
+                    data = response.read()
+
+                image = Image.open(io.BytesIO(data)).convert("RGB")
+                image.thumbnail((180, 180), Image.Resampling.LANCZOS)
+                photo = ImageTk.PhotoImage(image)
+
+                self.root.after(0, lambda p=photo: self.set_image(p))
+            except Exception:
+                pass
+
+            time.sleep(30)
+
+    def _set_remote_text(self, text):
+        if not self.closing and self.current_station is None:
+            self.text_label.configure(text=text[:4000])
 
     def set_image(self, photo):
-        """Punta in modo sicuro l'immagine all'etichetta grafica della UI"""
+        if self.closing:
+            return
+        self.photo = photo
         self.img_label.configure(image=photo)
-        self.img_label.image = photo
 
     def on_closing(self):
-        self.stop_stream()
+        self.closing = True
+        self.stop_stream(update_status=False)
         self.root.destroy()
 
-# =========================================================================
-# AVVIO APPLICAZIONE
-# =========================================================================
+
 if __name__ == "__main__":
     root = tk.Tk()
-    app = FinalDynamicRadioApp(root)
+    app = RadioSolarisApp(root)
     root.mainloop()
