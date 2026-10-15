@@ -5,12 +5,12 @@ import time
 import io
 import ssl
 import os
-os.environ['PYGAME_HIDE_SUPPORT_PROMPT'] = "hide"
-import pygame  # Mixer audio ultra-veloce e senza sovrapposizioni
+# Utilizziamo la libreria MPV nativa: leggera, fulminea sui flussi web e non sovrappone l'audio
+import mpv 
 from PIL import Image, ImageTk
 
 # =========================================================================
-# IMPOSTA QUI I TUOI INDIRIZZI FISSI ESTERNI
+# IMPOSTA QUI I TUOI INDIRIZZI FISSI ESTERNI (SOSTITUISCI I LINK D'ESEMPIO)
 # =========================================================================
 URL_TESTO_REMOTO = "https://www.crt.red/2/info.txt"
 URL_COPERTINA_IMG = "https://www.crt.red/2/copertina.jpg"
@@ -29,8 +29,8 @@ class FinalDynamicRadioApp:
         self.root.geometry("450x650")
         self.root.configure(bg="#1e1e1e")
         
-        # Inizializza il motore audio di Pygame
-        pygame.mixer.init()
+        # Inizializzazione del player MPV (configurato solo per l'audio)
+        self.player = mpv.MPV(ytdl=False, video=False)
         
         # UI Grafica Scura Windows 11
         self.label_title = tk.Label(root, text="RADIO SOLARIS DESKTOP", font=("Arial", 16, "bold"), fg="white", bg="#1e1e1e")
@@ -45,7 +45,7 @@ class FinalDynamicRadioApp:
         self.text_label = tk.Label(root, text="Sincronizzazione contenuti...", font=("Arial", 11), fg="white", bg="#1e1e1e", wraplength=380)
         self.text_label.pack(pady=10, padx=10)
         
-        # Sostituisci questi indirizzi d'esempio con i tuoi flussi reali completi
+        # Sostituisci questi indirizzi d'esempio con i tuoi 4 flussi reali
         r1 = "https://cast5.asurahosting.com/proxy/giancar1/stream"
         r2 = "http://stream.laut.fm/wolf-one"
         r3 = "https://cast6.asurahosting.com/proxy/radiosolaris/stream"
@@ -68,33 +68,27 @@ class FinalDynamicRadioApp:
             btn.configure(command=lambda u=url, n=nome: self.play_stream(u, n))
             btn.pack(pady=6, padx=10, fill="x")
             
-        # Pulsante STOP per spegnere la radio all'istante
+        # Pulsante STOP globale
         btn_stop = tk.Button(self.root, text="⏹️ FERMA RADIO", font=("Arial", 11, "bold"), fg="white", bg="#d32f2f", activebackground="#9a0007", activeforeground="white", bd=0, height=2, cursor="hand2")
         btn_stop.configure(command=self.stop_stream)
         btn_stop.pack(pady=15, padx=30, fill="x")
 
     def play_stream(self, url, nome):
         self.text_label.configure(text=f"Connessione a: {nome}...")
-        # Interrompe la riproduzione precedente prima di caricare il nuovo URL
-        pygame.mixer.music.stop()
-        
-        threading.Thread(target=self._async_play, args=(url, nome), daemon=True).start()
-
-    def _async_play(self, url, nome):
         try:
-            pygame.mixer.music.load(url)
-            pygame.mixer.music.play()
-            self.root.after(0, lambda: self.text_label.configure(text=f"In riproduzione: {nome}"))
+            # MPV interrompe all'istante il vecchio flusso e avvia il nuovo senza sovrapposizioni
+            self.player.play(url)
+            self.text_label.configure(text=f"In riproduzione: {nome}")
         except:
-            self.root.after(0, lambda: self.text_label.configure(text="Errore: Flusso non disponibile"))
+            self.text_label.configure(text="Errore: Flusso non disponibile")
 
     def stop_stream(self):
-        pygame.mixer.music.stop()
+        self.player.stop()
         self.text_label.configure(text="Radio spenta.")
 
     def update_content_loop(self):
         while True:
-            # 1. Scaricamento del Testo
+            # 1. Scaricamento automatico del Testo
             try:
                 req_testo = urllib.request.Request(URL_TESTO_REMOTO, headers=HEADERS)
                 with urllib.request.urlopen(req_testo, context=ctx, timeout=8) as r:
@@ -120,8 +114,7 @@ class FinalDynamicRadioApp:
             time.sleep(15)
 
     def on_closing(self):
-        pygame.mixer.music.stop()
-        pygame.mixer.quit()
+        self.player.terminate()
         self.root.destroy()
 
 if __name__ == "__main__":
