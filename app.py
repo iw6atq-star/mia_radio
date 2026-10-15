@@ -4,9 +4,7 @@ import threading
 import time
 import io
 import ssl
-import os
-# Utilizziamo la libreria MPV nativa: leggera, fulminea sui flussi web e non sovrappone l'audio
-import mpv 
+import winsound  # Sistema audio ufficiale di Windows di serie, zero DLL esterne
 from PIL import Image, ImageTk
 
 # =========================================================================
@@ -29,8 +27,10 @@ class FinalDynamicRadioApp:
         self.root.geometry("450x650")
         self.root.configure(bg="#1e1e1e")
         
-        # Inizializzazione del player MPV (configurato solo per l'audio)
-        self.player = mpv.MPV(ytdl=False, video=False)
+        # Variabili di controllo per lo streaming continuo
+        self.is_playing = False
+        self.audio_thread = None
+        self._stop_event = threading.Event()
         
         # UI Grafica Scura Windows 11
         self.label_title = tk.Label(root, text="RADIO SOLARIS DESKTOP", font=("Arial", 16, "bold"), fg="white", bg="#1e1e1e")
@@ -46,7 +46,7 @@ class FinalDynamicRadioApp:
         self.text_label.pack(pady=10, padx=10)
         
         # Sostituisci questi indirizzi d'esempio con i tuoi 4 flussi reali
-        r1 = "https://cast5.asurahosting.com/proxy/giancar1/stream"
+        r1 = "https://cast5.asurahosting.com/proxy/giancar1/streamm"
         r2 = "http://stream.laut.fm/wolf-one"
         r3 = "https://cast6.asurahosting.com/proxy/radiosolaris/stream"
         r4 = "https://fra-pioneer01.dedicateware.com:3155/stream"
@@ -68,27 +68,46 @@ class FinalDynamicRadioApp:
             btn.configure(command=lambda u=url, n=nome: self.play_stream(u, n))
             btn.pack(pady=6, padx=10, fill="x")
             
-        # Pulsante STOP globale
+        # Bottone STOP reale
         btn_stop = tk.Button(self.root, text="⏹️ FERMA RADIO", font=("Arial", 11, "bold"), fg="white", bg="#d32f2f", activebackground="#9a0007", activeforeground="white", bd=0, height=2, cursor="hand2")
         btn_stop.configure(command=self.stop_stream)
         btn_stop.pack(pady=15, padx=30, fill="x")
 
     def play_stream(self, url, nome):
         self.text_label.configure(text=f"Connessione a: {nome}...")
+        self.stop_stream()
+        
+        self._stop_event.clear()
+        self.is_playing = True
+        self.audio_thread = threading.Thread(target=self._stream_audio_worker, args=(url, nome), daemon=True)
+        self.audio_thread.start()
+
+    def _stream_audio_worker(self, url, nome):
         try:
-            # MPV interrompe all'istante il vecchio flusso e avvia il nuovo senza sovrapposizioni
-            self.player.play(url)
-            self.text_label.configure(text=f"In riproduzione: {nome}")
+            req = urllib.request.Request(url, headers=HEADERS)
+            with urllib.request.urlopen(req, context=ctx, timeout=8) as response:
+                self.root.after(0, lambda: self.text_label.configure(text=f"In riproduzione: {nome}"))
+                
+                # Legge e riproduce continuamente i blocchi audio dal web senza sovrapposizioni
+                while self.is_playing and not self._stop_event.is_set():
+                    chunk = response.read(4096)
+                    if not chunk:
+                        break
+                    # Invia il blocco dati binario direttamente alle casse di Windows
+                    winsound.PlaySound(chunk, winsound.SND_MEMORY | winsound.SND_ASYNC | winsound.SND_NODEFAULT)
         except:
-            self.text_label.configure(text="Errore: Flusso non disponibile")
+            self.root.after(0, lambda: self.text_label.configure(text="Errore: Flusso non disponibile"))
 
     def stop_stream(self):
-        self.player.stop()
+        self._stop_event.set()
+        self.is_playing = False
+        # Interrompe istantaneamente qualsiasi suono emesso dal sistema Windows
+        winsound.PlaySound(None, winsound.SND_PURGE)
         self.text_label.configure(text="Radio spenta.")
 
     def update_content_loop(self):
         while True:
-            # 1. Scaricamento automatico del Testo
+            # 1. Scaricamento del Testo
             try:
                 req_testo = urllib.request.Request(URL_TESTO_REMOTO, headers=HEADERS)
                 with urllib.request.urlopen(req_testo, context=ctx, timeout=8) as r:
@@ -97,7 +116,7 @@ class FinalDynamicRadioApp:
             except:
                 pass
                 
-            # 2. Scaricamento binario diretto dell'Immagine JPG
+            # 2. Scaricamento binario dell'Immagine
             try:
                 req_img = urllib.request.Request(URL_COPERTINA_IMG, headers=HEADERS)
                 with urllib.request.urlopen(req_img, context=ctx, timeout=8) as r_img:
@@ -114,7 +133,7 @@ class FinalDynamicRadioApp:
             time.sleep(15)
 
     def on_closing(self):
-        self.player.terminate()
+        self.stop_stream()
         self.root.destroy()
 
 if __name__ == "__main__":
