@@ -11,7 +11,7 @@ from PIL import Image, ImageTk
 # IMPOSTA QUI I TUOI INDIRIZZI FISSI ESTERNI (SOSTITUISCI I LINK D'ESEMPIO)
 # =========================================================================
 URL_TESTO_REMOTO = "https://www.crt.red/2/info.txt"
-URL_COPERTINA_IMG = "https://www.crt.red/2/copertina.jpg"
+URL_COPERTINA_IMG = "https://crt.red/2/copertina.jpg"
 # =========================================================================
 
 HEADERS = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/120.0.0.0'}
@@ -48,14 +48,14 @@ class FinalDynamicRadioApp:
         r2 = "http://stream.laut.fm/wolf-one"
         r3 = "https://cast6.asurahosting.com/proxy/radiosolaris/stream"
         r4 = "https://fra-pioneer01.dedicateware.com:3155/stream"
-        r5 = "https://www.crt.red/2/A.mp3"  # <--- Il tuo file MP3 fisso sul web
+        r5 = "https://crt.red/2/A.mp3"  # <--- Il tuo file MP3 fisso sul web
         
         self.streams = {
             "DISCOVERY 2 RADIO": r1,
             "WOLF 1 RADIO": r2,
             "RADIO SOLARIS": r3,
             "LAIKA 2 RADIO": r4,
-            "STAZIONE MP3 WEB": r5  # Nuova stazione aggiunta
+            "STAZIONE 5": r5  # Nuova stazione aggiunta
         }
         
         self.build_ui()
@@ -77,16 +77,29 @@ class FinalDynamicRadioApp:
         self.text_label.configure(text=f"Apertura: {nome}...")
         self.stop_stream()
         
-        # Avvia lo streaming o il file MP3 tramite Windows Media Player in modalità background invisibile
         try:
-            cmd = f'wmplayer.exe "{url}" /play /close'
-            self.audio_process = subprocess.Popen(cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+            # Comando pulito senza flag distruttivi (/play /close rimossi per evitare il muto)
+            cmd = f'wmplayer.exe "{url}"'
+            
+            # Configurazione nativa Windows per forzare il processo a rimanere invisibile a schermo
+            startupinfo = subprocess.STARTUPINFO()
+            startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
+            startupinfo.wShowWindow = 0  # Valore 0 equivale a SW_HIDE (Finestra completamente nascosta)
+            
+            # Avvia Windows Media Player in background isolato
+            self.audio_process = subprocess.Popen(
+                cmd, 
+                shell=True, 
+                startupinfo=startupinfo, 
+                stdout=subprocess.PIPE, 
+                stderr=subprocess.PIPE
+            )
             self.text_label.configure(text=f"In riproduzione: {nome}")
         except:
             self.text_label.configure(text="Errore: Contenuto non disponibile")
 
     def stop_stream(self):
-        # Chiude in modo forzato qualsiasi istanza di Windows Media Player aperta in background
+        # Chiude in modo forzato qualsiasi istanza nascosta avviata in background
         try:
             subprocess.run("taskkill /f /im wmplayer.exe", shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         except:
