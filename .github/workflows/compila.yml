@@ -22,7 +22,7 @@ jobs:
       shell: cmd
       run: |
         python -m pip install --upgrade pip
-        pip install Pillow pygame pyinstaller
+        pip install Pillow python-mpv pyinstaller
 
     - name: Compila in file EXE unico e blindato
       shell: cmd
