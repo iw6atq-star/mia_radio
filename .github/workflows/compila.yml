@@ -21,11 +21,11 @@ jobs:
     - name: Installa le librerie indispensabili
       run: |
         python -m pip install --upgrade pip
-        pip install customtkinter Pillow pyinstaller
+        pip install customtkinter Pillow miniaudio pyinstaller
 
     - name: Compila in file EXE unico e blindato
       run: |
-        pyinstaller --noconsole --onefile --collect-all customtkinter app.py
+        pyinstaller --noconsole --onefile --collect-all customtkinter --collect-all miniaudio app.py
 
     - name: Salva il file compilato
       uses: actions/upload-artifact@v4
