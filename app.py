@@ -2,13 +2,13 @@ import tkinter as tk
 import threading
 import urllib.request
 import ssl
-import subprocess  # Avvia flussi e file web usando il motore nativo di Windows
+import subprocess
 import time
 import io
 from PIL import Image, ImageTk
 
 # =========================================================================
-# IMPOSTA QUI I TUOI INDIRIZZI FISSI ESTERNI
+# IMPOSTA QUI I TUOI INDIRIZZI FISSI ESTERNI (RIPRISTINATI)
 # =========================================================================
 URL_TESTO_REMOTO = "https://crt.red/2/info.txt"
 URL_COPERTINA_IMG = "https://crt.red/2/copertina.jpg"
@@ -29,7 +29,7 @@ class FinalDynamicRadioApp:
         self.label_title = tk.Label(root, text="RADIO SOLARIS DESKTOP", font=("Arial", 16, "bold"), fg="white", bg="#1e1e1e")
         self.label_title.pack(pady=20)
 
-        # Contenitore per l'immagine di copertina
+        # Contenitore per l'immagine di copertina (SISTEMATO)
         self.img_label = tk.Label(root, bg="#1e1e1e")
         self.img_label.pack(pady=10)
 
@@ -37,6 +37,7 @@ class FinalDynamicRadioApp:
         self.radio_frame = tk.Frame(root, bg="#1e1e1e")
         self.radio_frame.pack(pady=10, fill="x")
 
+        # Display informativo testuale (SISTEMATO)
         self.text_label = tk.Label(root, text="Sincronizzazione contenuti...", font=("Arial", 11), fg="white", bg="#1e1e1e", wraplength=380)
         self.text_label.pack(pady=10, padx=10)
 
@@ -45,14 +46,14 @@ class FinalDynamicRadioApp:
         r2 = "http://stream.laut.fm/wolf-one"
         r3 = "https://cast6.asurahosting.com/proxy/radiosolaris/stream"
         r4 = "https://fra-pioneer01.dedicateware.com:3155/stream"
-        r5 = "https://crt.red/2/A.mp3"
+        r5 = "https://crt.red"
         
         self.streams = {
             "DISCOVERY 2 RADIO": r1,
             "WOLF 1 RADIO": r2,
             "RADIO SOLARIS": r3,
             "LAIKA 2 RADIO": r4,
-            "TEMPOREALE24": r5
+            "STAZIONE 5": r5
         }
         
         # Gestione stazioni (I tuoi parametri di rete originali)
@@ -64,7 +65,10 @@ class FinalDynamicRadioApp:
         self.ctx.verify_mode = ssl.CERT_NONE
 
         self.build_ui()
+        
+        # Avvia il ciclo continuo di aggiornamento per immagini e testi
         threading.Thread(target=self.update_content_loop, daemon=True).start()
+        
         self.root.protocol("WM_DELETE_WINDOW", self.on_closing)
 
     def build_ui(self):
@@ -86,7 +90,7 @@ class FinalDynamicRadioApp:
     def play_stream(self, url, nome):
         self.text_label.configure(text=f"Apertura: {nome}...")
         self.stop_stream()
-        # Avvia la riproduzione nativa invisibile accoppiando i parametri corretti
+        # Avvia lo scaricamento e la riproduzione in background continuo senza congelare Tkinter
         threading.Thread(target=self.execute_native_audio, args=(url, nome), daemon=True).start()
         
     def play_mp3_stream(self):
@@ -95,23 +99,16 @@ class FinalDynamicRadioApp:
 
     def execute_native_audio(self, url, nome):
         try:
-            # Comando PowerShell per riprodurre sia flussi live sia MP3 via kernel di Windows
-            ps_cmd = (
-                f"[Reflection.Assembly]::LoadWithPartialName('PresentationCore') | Out-Null; "
-                f"$player = New-Object System.Windows.Media.MediaPlayer; "
-                f"$player.Open('{url}'); "
-                f"$player.Play(); "
-                f"while ($true) {{ Start-Sleep -Seconds 1 }}"
-            )
+            # Comando di Windows Media Player eseguito in modo isolato
+            cmd = f'wmplayer.exe "{url}"'
             
-            # Configurazione nativa Windows per forzare il processo a rimanere invisibile a schermo
             startupinfo = subprocess.STARTUPINFO()
             startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
-            startupinfo.wShowWindow = 0  # Finestra completamente nascosta (SW_HIDE)
+            startupinfo.wShowWindow = 0  # 0 nasconde del tutto la finestra principale, lasciando l'audio attivo
             
-            # Avvia l'audio isolato in background
             self.audio_process = subprocess.Popen(
-                ["powershell", "-Command", ps_cmd],
+                cmd, 
+                shell=True, 
                 startupinfo=startupinfo,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE
@@ -121,9 +118,7 @@ class FinalDynamicRadioApp:
             self.root.after(0, lambda: self.text_label.configure(text="Errore nel caricamento del flusso audio"))
 
     def stop_stream(self):
-        # Chiude in modo forzato qualsiasi istanza nascosta o processo orfano in background
         try:
-            subprocess.run("taskkill /f /im powershell.exe", shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
             subprocess.run("taskkill /f /im wmplayer.exe", shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         except:
             pass
@@ -131,16 +126,17 @@ class FinalDynamicRadioApp:
         self.text_label.configure(text="Radio spenta.")
 
     def update_content_loop(self):
+        """Loop di sincronizzazione che scarica costantemente testo e copertina dal server"""
         while True:
             try:
-                # Carica il testo informativo dal server remoto
+                # 1. Scaricamento ed esposizione del testo informativo remoto
                 req_text = urllib.request.Request(URL_TESTO_REMOTO, headers=HEADERS)
                 with urllib.request.urlopen(req_text, context=self.ctx, timeout=5) as response:
                     testo = response.read().decode('utf-8', errors='ignore').strip()
                 if testo:
                     self.root.after(0, lambda t=testo: self.text_label.configure(text=t))
 
-                # Carica la copertina dinamica aggiornata
+                # 2. Scaricamento ed elaborazione dell'immagine di copertina remota
                 req_img = urllib.request.Request(URL_COPERTINA_IMG, headers=HEADERS)
                 with urllib.request.urlopen(req_img, context=self.ctx, timeout=5) as response:
                     img_data = response.read()
@@ -150,11 +146,12 @@ class FinalDynamicRadioApp:
                 photo = ImageTk.PhotoImage(image)
                 
                 self.root.after(0, lambda p=photo: self.set_image(p))
-            except:
+            except Exception as e:
                 pass
-            time.sleep(30)
+            time.sleep(30)  # Esegue il controllo di sincronizzazione ogni 30 secondi
 
     def set_image(self, photo):
+        """Punta in modo sicuro l'immagine all'etichetta grafica della UI"""
         self.img_label.configure(image=photo)
         self.img_label.image = photo
 
@@ -169,4 +166,3 @@ if __name__ == "__main__":
     root = tk.Tk()
     app = FinalDynamicRadioApp(root)
     root.mainloop()
-
