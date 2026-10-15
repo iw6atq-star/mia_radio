@@ -1,89 +1,68 @@
 import tkinter as tk
-import customtkinter as ctk
 import urllib.request
 import threading
 import time
-import os
 import io
 import webbrowser
 import ssl
-from PIL import Image
+from PIL import Image, ImageTk
 
-# Ricostruzione dei link a pezzi per evitare i tagli della chat
-URL_BASE_SITO = "https://discovery2radio.it"
-CONFIG_URL = URL_BASE_SITO + "/radio_config.txt"
+# =========================================================================
+# I TUOI DUE INDIRIZZI FISSI SU GITHUB (IMBLOCCABILI DA CLOUDFLARE)
+# =========================================================================
+URL_TESTO_REMOTO = "https://raw.githubusercontent.com/iw6atq-star/mia_radio/refs/heads/main/info.txt"
+
+# Incolla tra le virgolette il link RAW del tuo file copertina.txt
+URL_COPERTINA_TXT = "https://raw.githubusercontent.com/iw6atq-star/mia_radio/refs/heads/main/copertina.txt"
+# =========================================================================
 
 HEADERS = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/120.0.0.0'}
 
-# Forza il bypass dei controlli di sicurezza SSL rigidi dell'hosting
 ctx = ssl.create_default_context()
 ctx.check_hostname = False
 ctx.verify_mode = ssl.CERT_NONE
 
-class BlindedRadioApp(ctk.CTk):
-    def __init__(self):
-        super().__init__()
+class FinalDynamicRadioApp:
+    def __init__(self, root):
+        self.root = root
+        self.root.title("Discovery 2 Radio Player")
+        self.root.geometry("450x650")
+        self.root.configure(bg="#1e1e1e")
         
-        self.title("Discovery 2 Radio Player")
-        self.geometry("450x650")
-        ctk.set_appearance_mode("dark")
-        ctk.set_default_color_theme("blue")
-        
-        # Interfaccia Grafica Iniziale
-        self.label_title = ctk.CTkLabel(self, text="Discovery 2 Radio Player", font=ctk.CTkFont(size=20, weight="bold"))
+        # UI Grafica Scura Windows 11
+        self.label_title = tk.Label(root, text="Discovery 2 Radio Player", font=("Arial", 16, "bold"), fg="white", bg="#1e1e1e")
         self.label_title.pack(pady=20)
         
-        self.radio_frame = ctk.CTkFrame(self)
+        self.radio_frame = tk.Frame(root, bg="#1e1e1e")
         self.radio_frame.pack(pady=10, padx=20, fill="x")
         
-        self.image_label = ctk.CTkLabel(self, text="[ Caricamento Copertina... ]")
+        self.image_label = tk.Label(root, text="[ Caricamento Copertina... ]", fg="gray", bg="#1e1e1e")
         self.image_label.pack(pady=20)
         
-        self.text_label = ctk.CTkLabel(self, text="Sincronizzazione canali...", wraplength=380, font=ctk.CTkFont(size=14))
+        self.text_label = tk.Label(root, text="Sincronizzazione contenuti...", font=("Arial", 11), fg="white", bg="#1e1e1e", wraplength=380)
         self.text_label.pack(pady=10, padx=10)
         
-        # Flussi definitivi delle tue radio ricostruiti al millimetro per evitare alterazioni
-        self.config_data = {
-            "TITOLO_APP": "Discovery 2 Radio Player",
-            "RADIO1_NOME": "DISCOVERY 2 RADIO", 
-            "RADIO1_URL": "https://cast5.asurahosting.com/proxy/giancar1/stream ",
-            "RADIO2_NOME": "WOLF 1 RADIO", 
-            "RADIO2_URL": "http://stream.laut.fm/wolf-one",
-            "RADIO3_NOME": "RADIO SOLARIS", 
-            "RADIO3_URL": "https://cast6.asurahosting.com/proxy/radiosolaris/stream",
-            "RADIO4_NOME": "LAIKA 2 RADIO", 
-            "RADIO4_URL": "https://fra-pioneer01.dedicateware.com:3155/stream
-",
-            "LINK_TESTO": URL_BASE_SITO + "/info.txt",
-            "LINK_IMMAGINE": URL_BASE_SITO + "/copertina.jpg"
+        # Flussi streaming reali delle tue radio
+        r1 = "https://cast5.asurahosting.com/proxy/giancar1/stream"
+        r2 = "http://stream.laut.fm/wolf-one"
+        r3 = "https://cast6.asurahosting.com/proxy/radiosolaris/stream"
+        r4 = "https://fra-pioneer01.dedicateware.com:3155/stream"
+        
+        self.streams = {
+            "DISCOVERY 2 RADIO": r1,
+            "WOLF 1 RADIO": r2,
+            "RADIO SOLARIS": r3,
+            "LAIKA 2 RADIO": r4
         }
         
-        # Genera i bottoni immediatamente con i dati interni protetti
-        self.build_ui_dinamica()
-        
-        # Tenta l'aggiornamento remoto in background (Testo e Copertina)
-        threading.Thread(target=self.load_remote_config, daemon=True).start()
-
-    def load_remote_config(self):
-        try:
-            req = urllib.request.Request(CONFIG_URL, headers=HEADERS)
-            with urllib.request.urlopen(req, context=ctx, timeout=8) as response:
-                lines = response.read().decode('utf-8', errors='ignore').splitlines()
-                for line in lines:
-                    if "=" in line:
-                        k, v = line.split("=", 1)
-                        self.config_data[k.strip()] = v.strip()
-            self.after(0, lambda: self.label_title.configure(text=self.config_data.get("TITOLO_APP")))
-        except:
-            pass # Se il sito dà 403 o scade, l'app usa comunque i dati interni di emergenza senza bloccarsi
-        
+        self.last_image_url = ""
+        self.build_ui()
         threading.Thread(target=self.update_content_loop, daemon=True).start()
 
-    def build_ui_dinamica(self):
-        for i in range(1, 5):
-            nome = self.config_data.get(f"RADIO{i}_NOME")
-            url = self.config_data.get(f"RADIO{i}_URL")
-            btn = ctk.CTkButton(self.radio_frame, text=f"📻 {nome}", command=lambda u=url, n=nome: self.play_stream(u, n))
+    def build_ui(self):
+        for nome, url in self.streams.items():
+            btn = tk.Button(self.radio_frame, text=f"📻 {nome}", font=("Arial", 11, "bold"), fg="white", bg="#0078d4", activebackground="#005a9e", activeforeground="white", bd=0, height=2, cursor="hand2")
+            btn.configure(command=lambda u=url, n=nome: self.play_stream(u, n))
             btn.pack(pady=6, padx=10, fill="x")
 
     def play_stream(self, url, nome):
@@ -95,28 +74,37 @@ class BlindedRadioApp(ctk.CTk):
 
     def update_content_loop(self):
         while True:
+            # 1. Aggiornamento automatico del Testo da GitHub (info.txt)
             try:
-                # Recupero del testo scorrevole
-                url_testo = self.config_data.get("LINK_TESTO")
-                if url_testo:
-                    req_testo = urllib.request.Request(url_testo, headers=HEADERS)
-                    with urllib.request.urlopen(req_testo, context=ctx, timeout=5) as r:
-                        testo = r.read().decode('utf-8', errors='ignore')
-                        self.after(0, lambda t=testo: self.text_label.configure(text=t))
-                
-                # Recupero e rendering dell'immagine
-                url_img = self.config_data.get("LINK_IMMAGINE")
-                if url_img:
-                    req_img = urllib.request.Request(url_img, headers=HEADERS)
-                    with urllib.request.urlopen(req_img, context=ctx, timeout=5) as r:
-                        img_data = r.read()
-                        img = Image.open(io.BytesIO(img_data))
-                        ctk_img = ctk.CTkImage(light_image=img, dark_image=img, size=(200, 200))
-                        self.after(0, lambda ci=ctk_img: self.image_label.configure(image=ci, text=""))
+                req_testo = urllib.request.Request(URL_TESTO_REMOTO, headers=HEADERS)
+                with urllib.request.urlopen(req_testo, context=ctx, timeout=8) as r:
+                    testo = r.read().decode('utf-8', errors='ignore')
+                    self.root.after(0, lambda t=testo: self.text_label.configure(text=t))
             except:
                 pass
-            time.sleep(20)
+                
+            # 2. Aggiornamento automatico dell'Immagine leggendo il link dentro copertina.txt
+            try:
+                req_link_img = urllib.request.Request(URL_COPERTINA_TXT, headers=HEADERS)
+                with urllib.request.urlopen(req_link_img, context=ctx, timeout=8) as r_link:
+                    real_img_url = r_link.read().decode('utf-8', errors='ignore').strip()
+                    
+                    if real_img_url and real_img_url != self.last_image_url:
+                        self.last_image_url = real_img_url
+                        req_img = urllib.request.Request(real_img_url, headers=HEADERS)
+                        with urllib.request.urlopen(req_img, context=ctx, timeout=8) as r_img:
+                            img_data = r_img.read()
+                            img = Image.open(io.BytesIO(img_data))
+                            img = img.resize((200, 200), Image.Resampling.LANCZOS)
+                            ctk_img = ImageTk.PhotoImage(img)
+                            self.root.after(0, lambda ci=ctk_img: self.image_label.configure(image=ci, text=""))
+                            self.image_label.image = ctk_img
+            except:
+                pass
+                
+            time.sleep(15) # Ricontrolla tutto ogni 15 secondi automaticamente
 
 if __name__ == "__main__":
-    app = BlindedRadioApp()
-    app.mainloop()
+    root = tk.Tk()
+    app = FinalDynamicRadioApp(root)
+    root.mainloop()
