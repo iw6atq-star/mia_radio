@@ -4,7 +4,7 @@ import threading
 import time
 import io
 import ssl
-import winsound  # Sistema audio ufficiale di Windows di serie, zero DLL esterne
+import subprocess  # Avvia flussi e file web usando il motore nativo di Windows
 from PIL import Image, ImageTk
 
 # =========================================================================
@@ -24,13 +24,11 @@ class FinalDynamicRadioApp:
     def __init__(self, root):
         self.root = root
         self.root.title("RADIO SOLARIS DESKTOP")
-        self.root.geometry("450x650")
+        self.root.geometry("450x680") # Aumentata leggermente l'altezza per far spazio al quinto bottone
         self.root.configure(bg="#1e1e1e")
         
-        # Variabili di controllo per lo streaming continuo
-        self.is_playing = False
-        self.audio_thread = None
-        self._stop_event = threading.Event()
+        # Gestore per tracciare il processo audio attivo
+        self.audio_process = None
         
         # UI Grafica Scura Windows 11
         self.label_title = tk.Label(root, text="RADIO SOLARIS DESKTOP", font=("Arial", 16, "bold"), fg="white", bg="#1e1e1e")
@@ -45,17 +43,19 @@ class FinalDynamicRadioApp:
         self.text_label = tk.Label(root, text="Sincronizzazione contenuti...", font=("Arial", 11), fg="white", bg="#1e1e1e", wraplength=380)
         self.text_label.pack(pady=10, padx=10)
         
-        # Sostituisci questi indirizzi d'esempio con i tuoi 4 flussi reali
-        r1 = "https://cast5.asurahosting.com/proxy/giancar1/streamm"
+        # Sostituisci questi indirizzi d'esempio con i tuoi link reali completi
+        r1 = "https://cast5.asurahosting.com/proxy/giancar1/stream"
         r2 = "http://stream.laut.fm/wolf-one"
         r3 = "https://cast6.asurahosting.com/proxy/radiosolaris/stream"
         r4 = "https://fra-pioneer01.dedicateware.com:3155/stream"
+        r5 = "https://www.crt.red/2/A.mp3"  # <--- Il tuo file MP3 fisso sul web
         
         self.streams = {
             "DISCOVERY 2 RADIO": r1,
             "WOLF 1 RADIO": r2,
             "RADIO SOLARIS": r3,
-            "LAIKA 2 RADIO": r4
+            "LAIKA 2 RADIO": r4,
+            "STAZIONE MP3 WEB": r5  # Nuova stazione aggiunta
         }
         
         self.build_ui()
@@ -66,43 +66,32 @@ class FinalDynamicRadioApp:
         for nome, url in self.streams.items():
             btn = tk.Button(self.radio_frame, text=f"📻 {nome}", font=("Arial", 11, "bold"), fg="white", bg="#0078d4", activebackground="#005a9e", activeforeground="white", bd=0, height=2, cursor="hand2")
             btn.configure(command=lambda u=url, n=nome: self.play_stream(u, n))
-            btn.pack(pady=6, padx=10, fill="x")
+            btn.pack(pady=5, padx=10, fill="x")
             
-        # Bottone STOP reale
+        # Bottone STOP dedicato
         btn_stop = tk.Button(self.root, text="⏹️ FERMA RADIO", font=("Arial", 11, "bold"), fg="white", bg="#d32f2f", activebackground="#9a0007", activeforeground="white", bd=0, height=2, cursor="hand2")
         btn_stop.configure(command=self.stop_stream)
         btn_stop.pack(pady=15, padx=30, fill="x")
 
     def play_stream(self, url, nome):
-        self.text_label.configure(text=f"Connessione a: {nome}...")
+        self.text_label.configure(text=f"Apertura: {nome}...")
         self.stop_stream()
         
-        self._stop_event.clear()
-        self.is_playing = True
-        self.audio_thread = threading.Thread(target=self._stream_audio_worker, args=(url, nome), daemon=True)
-        self.audio_thread.start()
-
-    def _stream_audio_worker(self, url, nome):
+        # Avvia lo streaming o il file MP3 tramite Windows Media Player in modalità background invisibile
         try:
-            req = urllib.request.Request(url, headers=HEADERS)
-            with urllib.request.urlopen(req, context=ctx, timeout=8) as response:
-                self.root.after(0, lambda: self.text_label.configure(text=f"In riproduzione: {nome}"))
-                
-                # Legge e riproduce continuamente i blocchi audio dal web senza sovrapposizioni
-                while self.is_playing and not self._stop_event.is_set():
-                    chunk = response.read(4096)
-                    if not chunk:
-                        break
-                    # Invia il blocco dati binario direttamente alle casse di Windows
-                    winsound.PlaySound(chunk, winsound.SND_MEMORY | winsound.SND_ASYNC | winsound.SND_NODEFAULT)
+            cmd = f'wmplayer.exe "{url}" /play /close'
+            self.audio_process = subprocess.Popen(cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+            self.text_label.configure(text=f"In riproduzione: {nome}")
         except:
-            self.root.after(0, lambda: self.text_label.configure(text="Errore: Flusso non disponibile"))
+            self.text_label.configure(text="Errore: Contenuto non disponibile")
 
     def stop_stream(self):
-        self._stop_event.set()
-        self.is_playing = False
-        # Interrompe istantaneamente qualsiasi suono emesso dal sistema Windows
-        winsound.PlaySound(None, winsound.SND_PURGE)
+        # Chiude in modo forzato qualsiasi istanza di Windows Media Player aperta in background
+        try:
+            subprocess.run("taskkill /f /im wmplayer.exe", shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        except:
+            pass
+        self.audio_process = None
         self.text_label.configure(text="Radio spenta.")
 
     def update_content_loop(self):
@@ -116,7 +105,7 @@ class FinalDynamicRadioApp:
             except:
                 pass
                 
-            # 2. Scaricamento binario dell'Immagine
+            # 2. Scaricamento binario diretto dell'Immagine JPG
             try:
                 req_img = urllib.request.Request(URL_COPERTINA_IMG, headers=HEADERS)
                 with urllib.request.urlopen(req_img, context=ctx, timeout=8) as r_img:
