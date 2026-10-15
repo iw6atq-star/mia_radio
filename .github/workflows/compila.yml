@@ -25,7 +25,7 @@ jobs:
 
     - name: Compila in file EXE unico e blindato
       run: |
-        pyinstaller --noconsole --onefile --collect-all customtkinter --collect-all miniaudio app.py
+        pyinstaller --noconsole --onefile --collect-all customtkinter app.py
 
     - name: Salva il file compilato
       uses: actions/upload-artifact@v4
