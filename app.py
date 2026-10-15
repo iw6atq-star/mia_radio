@@ -13,7 +13,7 @@ from PIL import Image, ImageTk
 URL_TESTO_REMOTO = "https://www.crt.red/2/info.txt"
 
 # Incolla tra le virgolette il link RAW del tuo file copertina.txt
-URL_COPERTINA_TXT = "https://www.crt.red/2/images.jpg"
+URL_COPERTINA_TXT = "https://www.crt.red/2/copertina.jpg"
 # =========================================================================
 
 HEADERS = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/120.0.0.0'}
@@ -25,12 +25,12 @@ ctx.verify_mode = ssl.CERT_NONE
 class FinalDynamicRadioApp:
     def __init__(self, root):
         self.root = root
-        self.root.title("Discovery 2 Radio Player")
+        self.root.title("RADIO SOLARIS DESKTOP")
         self.root.geometry("450x650")
         self.root.configure(bg="#1e1e1e")
         
         # UI Grafica Scura Windows 11
-        self.label_title = tk.Label(root, text="Discovery 2 Radio Player", font=("Arial", 16, "bold"), fg="white", bg="#1e1e1e")
+        self.label_title = tk.Label(root, text="RADIO SOLARIS DESKTOP", font=("Arial", 16, "bold"), fg="white", bg="#1e1e1e")
         self.label_title.pack(pady=20)
         
         self.radio_frame = tk.Frame(root, bg="#1e1e1e")
