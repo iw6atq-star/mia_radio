@@ -13,7 +13,7 @@ from PIL import Image, ImageTk
 URL_TESTO_REMOTO = "https://www.crt.red/2/info.txt"
 
 # Incolla tra le virgolette il link RAW del tuo file copertina.txt
-URL_COPERTINA_TXT = "https://raw.githubusercontent.com/iw6atq-star/mia_radio/refs/heads/main/copertina.txt"
+URL_COPERTINA_TXT = "https://www.crt.red/2/images.jpg"
 # =========================================================================
 
 HEADERS = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/120.0.0.0'}
