@@ -22,16 +22,25 @@ jobs:
       shell: cmd
       run: |
         python -m pip install --upgrade pip
-        pip install Pillow pyinstaller
+        pip install Pillow python-vlc pyinstaller
+
+    - name: Ottieni i file core binari VLC
+      shell: cmd
+      run: |
+        curl -L -o vlc.zip https://videolan.org
+        powershell Expand-Archive vlc.zip -DestinationPath vlc_extracted
+        mkdir vlc_bin
+        xcopy /E /Y vlc_extracted\vlc-3.0.20\plugins vlc_bin\plugins\
+        copy /Y vlc_extracted\vlc-3.0.20\libvlc.dll vlc_bin\
+        copy /Y vlc_extracted\vlc-3.0.20\libvlccore.dll vlc_bin\
 
     - name: Compila in file EXE unico e blindato
       shell: cmd
       run: |
-        python -m PyInstaller --noconsole --onefile app.py
+        python -m PyInstaller --noconsole --onefile --add-data "vlc_bin/libvlc.dll;." --add-data "vlc_bin/libvlccore.dll;." --add-data "vlc_bin/plugins;plugins" app.py
 
     - name: Salva il file compilato
       uses: actions/upload-artifact@v4
       with:
         name: Applicazione-Radio-Windows
         path: dist/app.exe
- 
