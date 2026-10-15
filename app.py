@@ -4,14 +4,16 @@ import threading
 import time
 import io
 import ssl
-import ctypes  # Utilizza il motore audio nativo di Windows (MCI) senza programmi esterni
+import ctypes  # Utilizza il motore audio nativo di Windows senza programmi esterni
 from PIL import Image, ImageTk
 
 # =========================================================================
-# INDIRIZZI FISSI
+# I TUOI DUE INDIRIZZI FISSI SU GITHUB (IMBLOCCABILI DA CLOUDFLARE)
 # =========================================================================
 URL_TESTO_REMOTO = "https://crt.red/2/info.txt"
-URL_COPERTINA_IMG = "https://crt.red/2/copertina.jpg"
+
+# Incolla tra le virgolette il link RAW del tuo file copertina.txt
+URL_COPERTINA_TXT = "https://crt.red/2/copertina.jpg"
 # =========================================================================
 
 HEADERS = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/120.0.0.0'}
@@ -27,7 +29,7 @@ class FinalDynamicRadioApp:
         self.root.geometry("450x650")
         self.root.configure(bg="#1e1e1e")
         
-        # Interfaccia Grafica Scura
+        # UI Grafica Scura Windows 11
         self.label_title = tk.Label(root, text="RADIO SOLARIS DESKTOP", font=("Arial", 16, "bold"), fg="white", bg="#1e1e1e")
         self.label_title.pack(pady=20)
         
@@ -41,7 +43,7 @@ class FinalDynamicRadioApp:
         self.text_label.pack(pady=10, padx=10)
         
         # Flussi streaming reali delle tue radio
-     r1 = "https://cast5.asurahosting.com/proxy/giancar1/stream"
+        r1 = "https://cast5.asurahosting.com/proxy/giancar1/stream"
         r2 = "http://stream.laut.fm/wolf-one"
         r3 = "https://cast6.asurahosting.com/proxy/radiosolaris/stream"
         r4 = "https://fra-pioneer01.dedicateware.com:3155/stream"
@@ -53,6 +55,7 @@ class FinalDynamicRadioApp:
             "LAIKA 2 RADIO": r4
         }
         
+        self.last_image_url = ""
         self.is_playing = False
         self.build_ui()
         threading.Thread(target=self.update_content_loop, daemon=True).start()
@@ -73,17 +76,14 @@ class FinalDynamicRadioApp:
     def play_stream(self, url, nome):
         self.text_label.configure(text=f"Apertura flusso: {nome}...")
         
-        # Se c'è una radio accesa, la spegne prima di cambiare
         if self.is_playing:
             self.send_mci_command("close radionet")
             self.is_playing = False
             
-        # Avvia la connessione allo streaming in un thread separato per evitare di bloccare la finestra
         threading.Thread(target=self._async_play, args=(url, nome), daemon=True).start()
 
     def _async_play(self, url, nome):
         try:
-            # Sfrutta il motore multimediale nativo MPEGVideo di Windows passando l'URL web
             self.send_mci_command(f'open "{url}" type mpegvideo alias radionet')
             self.send_mci_command("play radionet")
             self.is_playing = True
@@ -93,7 +93,7 @@ class FinalDynamicRadioApp:
 
     def update_content_loop(self):
         while True:
-            # 1. Aggiornamento automatico del Testo da GitHub
+            # 1. Aggiornamento automatico del Testo da GitHub (info.txt)
             try:
                 req_testo = urllib.request.Request(URL_TESTO_REMOTO, headers=HEADERS)
                 with urllib.request.urlopen(req_testo, context=ctx, timeout=8) as r:
@@ -102,21 +102,26 @@ class FinalDynamicRadioApp:
             except:
                 pass
                 
-            # 2. Aggiornamento automatico dell'Immagine di copertina (Scarica direttamente il JPG)
+            # 2. Aggiornamento automatico dell'Immagine leggendo il link dentro copertina.txt
             try:
-                req_img = urllib.request.Request(URL_COPERTINA_IMG, headers=HEADERS)
-                with urllib.request.urlopen(req_img, context=ctx, timeout=8) as r_img:
-                    img_data = r_img.read()
-                    img = Image.open(io.BytesIO(img_data))
-                    img = img.resize((200, 200), Image.Resampling.LANCZOS)
-                    ctk_img = ImageTk.PhotoImage(img)
+                req_link_img = urllib.request.Request(URL_COPERTINA_TXT, headers=HEADERS)
+                with urllib.request.urlopen(req_link_img, context=ctx, timeout=8) as r_link:
+                    real_img_url = r_link.read().decode('utf-8', errors='ignore').strip()
                     
-                    self.root.after(0, lambda ci=ctk_img: self.image_label.configure(image=ci, text=""))
-                    self.image_label.image = ctk_img
+                    if real_img_url and real_img_url != self.last_image_url:
+                        self.last_image_url = real_img_url
+                        req_img = urllib.request.Request(real_img_url, headers=HEADERS)
+                        with urllib.request.urlopen(req_img, context=ctx, timeout=8) as r_img:
+                            img_data = r_img.read()
+                            img = Image.open(io.BytesIO(img_data))
+                            img = img.resize((200, 200), Image.Resampling.LANCZOS)
+                            ctk_img = ImageTk.PhotoImage(img)
+                            self.root.after(0, lambda ci=ctk_img: self.image_label.configure(image=ci, text=""))
+                            self.image_label.image = ctk_img
             except:
                 pass
                 
-            time.sleep(15)
+            time.sleep(15) # Ricontrolla tutto ogni 15 secondi automaticamente
 
     def on_closing(self):
         if self.is_playing:
