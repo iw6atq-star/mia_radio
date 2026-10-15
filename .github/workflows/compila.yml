@@ -34,4 +34,3 @@ jobs:
       with:
         name: Applicazione-Radio-Windows
         path: dist/RadioSolaris.exe
-
