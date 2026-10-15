@@ -10,7 +10,7 @@ from PIL import Image, ImageTk
 # =========================================================================
 # I TUOI DUE INDIRIZZI FISSI SU GITHUB (IMBLOCCABILI DA CLOUDFLARE)
 # =========================================================================
-URL_TESTO_REMOTO = "https://raw.githubusercontent.com/iw6atq-star/mia_radio/refs/heads/main/info.txt"
+URL_TESTO_REMOTO = "https://www.crt.red/2/info.txt"
 
 # Incolla tra le virgolette il link RAW del tuo file copertina.txt
 URL_COPERTINA_TXT = "https://raw.githubusercontent.com/iw6atq-star/mia_radio/refs/heads/main/copertina.txt"
