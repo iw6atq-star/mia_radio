@@ -4,11 +4,11 @@ import threading
 import time
 import io
 import ssl
-import miniaudio  # Libreria integrata nell'eseguibile, non richiede VLC sul PC dell'utente
+import ctypes  # Utilizza il motore audio nativo di Windows (MCI) senza programmi esterni
 from PIL import Image, ImageTk
 
 # =========================================================================
-# INDIRIZZI FISSI SU GITHUB
+# INDIRIZZI FISSI
 # =========================================================================
 URL_TESTO_REMOTO = "https://crt.red/2/info.txt"
 URL_COPERTINA_IMG = "https://crt.red/2/copertina.jpg"
@@ -27,12 +27,7 @@ class FinalDynamicRadioApp:
         self.root.geometry("450x650")
         self.root.configure(bg="#1e1e1e")
         
-        # Inizializzazione del motore audio e dello stream corrente
-        self.audio_device = None
-        self.current_stream_thread = None
-        self._stop_signal = threading.Event()
-        
-        # UI Grafica Scura Windows 11
+        # Interfaccia Grafica Scura
         self.label_title = tk.Label(root, text="RADIO SOLARIS DESKTOP", font=("Arial", 16, "bold"), fg="white", bg="#1e1e1e")
         self.label_title.pack(pady=20)
         
@@ -46,10 +41,10 @@ class FinalDynamicRadioApp:
         self.text_label.pack(pady=10, padx=10)
         
         # Flussi streaming reali delle tue radio
-        r1 = "https://cast5.asurahosting.com/proxy/giancar1/stream"
+     r1 = "https://cast5.asurahosting.com/proxy/giancar1/stream"
         r2 = "http://stream.laut.fm/wolf-one"
         r3 = "https://cast6.asurahosting.com/proxy/radiosolaris/stream"
-        r4 = "https://fra-pioneer01.dedicateware.com:3155/stream
+        r4 = "https://fra-pioneer01.dedicateware.com:3155/stream"
         
         self.streams = {
             "DISCOVERY 2 RADIO": r1,
@@ -58,11 +53,16 @@ class FinalDynamicRadioApp:
             "LAIKA 2 RADIO": r4
         }
         
+        self.is_playing = False
         self.build_ui()
         threading.Thread(target=self.update_content_loop, daemon=True).start()
-        
-        # Gestisce la chiusura pulita dell'audio se l'utente chiude la finestra
         self.root.protocol("WM_DELETE_WINDOW", self.on_closing)
+
+    def send_mci_command(self, command):
+        """Invia un comando diretto al riproduttore audio interno di Windows"""
+        buffer = ctypes.create_string_buffer(255)
+        ctypes.windll.winmm.mciSendStringA(command.encode('utf-8'), buffer, 254, 0)
+        return buffer.value.decode('utf-8', errors='ignore')
 
     def build_ui(self):
         for nome, url in self.streams.items():
@@ -71,45 +71,25 @@ class FinalDynamicRadioApp:
             btn.pack(pady=6, padx=10, fill="x")
 
     def play_stream(self, url, nome):
-        self.text_label.configure(text=f"Connessione a: {nome}...")
+        self.text_label.configure(text=f"Apertura flusso: {nome}...")
         
-        # Ferma il flusso precedente se attivo
-        self.stop_audio()
-        
-        # Avvia la riproduzione in un thread separato per non bloccare la grafica della finestra
-        self._stop_signal.clear()
-        self.current_stream_thread = threading.Thread(target=self._stream_audio_worker, args=(url, nome), daemon=True)
-        self.current_stream_thread.start()
+        # Se c'è una radio accesa, la spegne prima di cambiare
+        if self.is_playing:
+            self.send_mci_command("close radionet")
+            self.is_playing = False
+            
+        # Avvia la connessione allo streaming in un thread separato per evitare di bloccare la finestra
+        threading.Thread(target=self._async_play, args=(url, nome), daemon=True).start()
 
-    def _stream_audio_worker(self, url, nome):
+    def _async_play(self, url, nome):
         try:
-            # Apre lo streaming HTTP come un file di dati continuo
-            req = urllib.request.Request(url, headers=HEADERS)
-            with urllib.request.urlopen(req, context=ctx, timeout=10) as response:
-                self.root.after(0, lambda: self.text_label.configure(text=f"In riproduzione: {nome}"))
-                
-                # Decodifica il flusso MP3 in tempo reale
-                dec = miniaudio.StreamDevice()
-                # miniaudio leggerà i blocchi di dati man mano che arrivano dal server web
-                with miniaudio.decode_client(response) as stream:
-                    self.audio_device = miniaudio.PlaybackDevice(output_format=stream.format, sample_rate=stream.sample_rate, channels=stream.nchannels)
-                    self.audio_device.start(stream)
-                    
-                    # Mantiene il thread vivo finché l'utente non cambia stazione o chiude l'app
-                    while not self._stop_signal.is_set() and self.audio_device.is_active():
-                        time.sleep(0.2)
-        except Exception as e:
-            self.root.after(0, lambda: self.text_label.configure(text=f"Errore connessione o flusso non supportato"))
-
-    def stop_audio(self):
-        self._stop_signal.set()
-        if self.audio_device:
-            try:
-                self.audio_device.stop()
-                self.audio_device.close()
-            except:
-                pass
-            self.audio_device = None
+            # Sfrutta il motore multimediale nativo MPEGVideo di Windows passando l'URL web
+            self.send_mci_command(f'open "{url}" type mpegvideo alias radionet')
+            self.send_mci_command("play radionet")
+            self.is_playing = True
+            self.root.after(0, lambda: self.text_label.configure(text=f"In riproduzione: {nome}"))
+        except:
+            self.root.after(0, lambda: self.text_label.configure(text="Impossibile riprodurre lo streaming"))
 
     def update_content_loop(self):
         while True:
@@ -139,7 +119,8 @@ class FinalDynamicRadioApp:
             time.sleep(15)
 
     def on_closing(self):
-        self.stop_audio()
+        if self.is_playing:
+            self.send_mci_command("close radionet")
         self.root.destroy()
 
 if __name__ == "__main__":
