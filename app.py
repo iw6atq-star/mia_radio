@@ -10,8 +10,8 @@ from PIL import Image, ImageTk
 # =========================================================================
 # IMPOSTA QUI I TUOI INDIRIZZI FISSI ESTERNI (SOSTITUISCI I LINK D'ESEMPIO)
 # =========================================================================
-URL_TESTO_REMOTO = "https://crt.red"
-URL_COPERTINA_IMG = "https://crt.red"
+URL_TESTO_REMOTO = "https://www.crt.red/2/info.txt"
+URL_COPERTINA_IMG = "https://crt.red/2/copertina.jpg"
 # =========================================================================
 
 HEADERS = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/120.0.0.0'}
