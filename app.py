@@ -22,7 +22,7 @@ STREAMS = {
     "WOLF 1 RADIO": "http://stream.laut.fm/wolf-one",
     "RADIO SOLARIS": "https://cast6.asurahosting.com/proxy/radiosolaris/stream",
     "LAIKA 2 RADIO": "https://fra-pioneer01.dedicateware.com:3155/stream",
-    "STAZIONE 5 — A.mp3": "https://www.crt.red/2/A.mp3",
+    "RADIO SENZA CONFINI": "https://www.crt.red/2/A.mp3",
 }
 
 
