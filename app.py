@@ -1,3 +1,4 @@
+
 import io
 import ssl
 import subprocess
@@ -41,9 +42,11 @@ class RadioSolarisApp:
         self.photo = None
 
         tk.Label(
-            root, text="RADIO SOLARIS DESKTOP",
+            root,
+            text="RADIO SOLARIS DESKTOP",
             font=("Arial", 16, "bold"),
-            fg="white", bg="#1e1e1e"
+            fg="white",
+            bg="#1e1e1e"
         ).pack(pady=(14, 8))
 
         self.img_label = tk.Label(root, bg="#1e1e1e")
@@ -57,30 +60,54 @@ class RadioSolarisApp:
                 self.radio_frame,
                 text=f"📻 {name}",
                 font=("Arial", 10, "bold"),
-                fg="white", bg="#0078d4",
+                fg="white",
+                bg="#0078d4",
                 activebackground="#005a9e",
-                bd=0, height=2, cursor="hand2",
+                bd=0,
+                height=2,
+                cursor="hand2",
                 command=lambda u=url, n=name: self.play_stream(u, n)
             ).pack(fill="x", pady=3)
 
-        self.text_label = tk.Label(
+        # Etichetta separata per lo stato della radio.
+        # Gli avvisi di riproduzione non cancellano più il testo del sito.
+        self.status_label = tk.Label(
             root,
             text="Pronto. Seleziona una stazione.",
+            font=("Arial", 9, "bold"),
+            fg="#8bd5ff",
+            bg="#1e1e1e",
+            wraplength=405,
+            justify="left",
+            anchor="w"
+        )
+        self.status_label.pack(fill="x", padx=14, pady=(5, 2))
+
+        # Questa etichetta è riservata al testo remoto del sito.
+        self.text_label = tk.Label(
+            root,
+            text="Caricamento testo dal sito...",
             font=("Arial", 10),
-            fg="white", bg="#1e1e1e",
-            wraplength=405, justify="left",
+            fg="white",
+            bg="#1e1e1e",
+            wraplength=405,
+            justify="left",
             anchor="nw"
         )
         self.text_label.pack(
-            fill="both", expand=True, padx=14, pady=8
+            fill="both", expand=True, padx=14, pady=(2, 8)
         )
 
         tk.Button(
-            root, text="⏹ FERMA RADIO",
+            root,
+            text="⏹ FERMA RADIO",
             font=("Arial", 11, "bold"),
-            fg="white", bg="#d32f2f",
+            fg="white",
+            bg="#d32f2f",
             activebackground="#9a0007",
-            bd=0, height=2, cursor="hand2",
+            bd=0,
+            height=2,
+            cursor="hand2",
             command=self.stop_stream
         ).pack(fill="x", padx=30, pady=(4, 14))
 
@@ -88,7 +115,8 @@ class RadioSolarisApp:
         self.root.protocol("WM_DELETE_WINDOW", self.on_closing)
 
         threading.Thread(
-            target=self.update_content_loop, daemon=True
+            target=self.update_content_loop,
+            daemon=True
         ).start()
 
     def set_status(self, text, generation=None):
@@ -103,7 +131,9 @@ class RadioSolarisApp:
             return
         if generation is not None and generation != self.generation:
             return
-        self.text_label.configure(text=text)
+
+        # Aggiorna soltanto lo stato della radio.
+        self.status_label.configure(text=text)
 
     def play_stream(self, url, name):
         self.stop_stream(update_status=False)
@@ -189,9 +219,13 @@ class RadioSolarisApp:
                 except Exception:
                     pass
 
-                message = f"La riproduzione di {name} è terminata o si è interrotta."
+                message = (
+                    f"La riproduzione di {name} "
+                    "è terminata o si è interrotta."
+                )
                 if detail:
                     message += "\nDettaglio: " + detail[:300]
+
                 self.set_status(message, generation)
 
         except Exception as exc:
@@ -244,11 +278,11 @@ class RadioSolarisApp:
 
     def update_content_loop(self):
         while not self.closing:
-            # Gli URL attuali sono homepage, non endpoint specifici.
-            # Il recupero viene mantenuto senza bloccare il motore audio.
+            # Aggiorna il testo remoto senza interrompere la radio.
             try:
                 req = urllib.request.Request(
-                    URL_TESTO_REMOTO, headers=HEADERS
+                    URL_TESTO_REMOTO,
+                    headers=HEADERS
                 )
                 with urllib.request.urlopen(
                     req, context=self.ctx, timeout=5
@@ -266,9 +300,11 @@ class RadioSolarisApp:
             except Exception:
                 pass
 
+            # Copertina leggermente più grande: 230 x 230.
             try:
                 req = urllib.request.Request(
-                    URL_COPERTINA_IMG, headers=HEADERS
+                    URL_COPERTINA_IMG,
+                    headers=HEADERS
                 )
                 with urllib.request.urlopen(
                     req, context=self.ctx, timeout=5
@@ -276,17 +312,20 @@ class RadioSolarisApp:
                     data = response.read()
 
                 image = Image.open(io.BytesIO(data)).convert("RGB")
-                image.thumbnail((180, 180), Image.Resampling.LANCZOS)
+                image.thumbnail((230, 230), Image.Resampling.LANCZOS)
                 photo = ImageTk.PhotoImage(image)
 
-                self.root.after(0, lambda p=photo: self.set_image(p))
+                self.root.after(
+                    0, lambda p=photo: self.set_image(p)
+                )
             except Exception:
                 pass
 
             time.sleep(30)
 
     def _set_remote_text(self, text):
-        if not self.closing and self.current_station is None:
+        # Il testo resta visibile anche mentre una radio suona.
+        if not self.closing:
             self.text_label.configure(text=text[:4000])
 
     def set_image(self, photo):
